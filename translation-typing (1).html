@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>번역 타이핑 연습</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a35;
+    --accent: #c8f135;
+    --accent2: #35f1c8;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --wrong: #ff4d6d;
+    --correct: #c8f135;
+    --hint: #f1a135;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; width: 100%; max-width: 860px; padding: 40px 24px 80px; }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(28px, 5vw, 42px);
+    color: var(--accent);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  header span {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* UPLOAD ZONE */
+  #upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 16px;
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  #upload-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 120%, rgba(200,241,53,0.06) 0%, transparent 60%);
+    transition: opacity 0.3s;
+  }
+  #upload-zone:hover, #upload-zone.drag-over {
+    border-color: var(--accent);
+    background: #1a1f10;
+  }
+  #upload-zone:hover::before { opacity: 2; }
+  #upload-zone .icon {
+    font-size: 40px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  #upload-zone p {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  #upload-zone strong { color: var(--text); font-weight: 500; }
+  #file-input { display: none; }
+
+  .upload-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    margin-top: 12px;
+    color: var(--muted);
+    opacity: 0.6;
+  }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 99px;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 99px;
+    transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+  }
+  .stat-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 20px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* CARD */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .sentence-counter {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .translation-text {
+    font-size: 22px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 28px;
+    letter-spacing: -0.3px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* HINT - 노란색 힌트 박스 제거 (char-preview 토글로 대체) */
+  .hint-area { display: none; }
+  .hint-text { display: none !important; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* INPUT */
+  .input-wrapper {
+    position: relative;
+    margin-bottom: 20px;
+  }
+  .typing-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    caret-color: var(--accent);
+  }
+  .typing-input::placeholder { color: var(--muted); opacity: 0.5; }
+  .typing-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(200, 241, 53, 0.08);
+  }
+  .typing-input.wrong {
+    border-color: var(--wrong);
+    box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.08);
+    animation: shake 0.35s ease;
+  }
+  .typing-input.correct {
+    border-color: var(--correct);
+    box-shadow: 0 0 0 3px rgba(200, 241, 53, 0.15);
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  /* BUTTONS ROW */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: all 0.15s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0d0d0f;
+  }
+  .btn-primary:hover { background: #d4f545; transform: translateY(-1px); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+  .btn-hint {
+    background: transparent;
+    color: var(--hint);
+    border: 1px solid rgba(241, 161, 53, 0.3);
+  }
+  .btn-hint:hover { background: rgba(241, 161, 53, 0.08); }
+
+  /* FEEDBACK */
+  .feedback {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    display: none;
+    animation: fadeIn 0.2s ease;
+  }
+  .feedback.show { display: block; }
+  .feedback.wrong-fb {
+    background: rgba(255, 77, 109, 0.1);
+    border: 1px solid rgba(255, 77, 109, 0.25);
+    color: var(--wrong);
+  }
+  .feedback.correct-fb {
+    background: rgba(200, 241, 53, 0.1);
+    border: 1px solid rgba(200, 241, 53, 0.25);
+    color: var(--correct);
+  }
+
+  /* MISSED LIST */
+  .missed-section {
+    margin-top: 16px;
+  }
+  .missed-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--wrong);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+  .missed-item {
+    background: rgba(255, 77, 109, 0.05);
+    border: 1px solid rgba(255, 77, 109, 0.15);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .missed-item span { color: var(--wrong); font-family: 'DM Mono', monospace; font-size: 12px; display: block; margin-top: 4px; }
+
+  /* COMPLETE SCREEN */
+  #complete-screen {
+    text-align: center;
+    padding: 60px 20px;
+    display: none;
+  }
+  #complete-screen.show { display: block; }
+  .complete-icon { font-size: 56px; margin-bottom: 20px; }
+  .complete-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .complete-sub {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 32px;
+    line-height: 1.7;
+  }
+  .complete-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+  }
+  .retry-btn {
+    background: var(--accent);
+    color: #0d0d0f;
+    padding: 14px 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    margin: 6px;
+    transition: all 0.15s ease;
+  }
+  .retry-btn:hover { background: #d4f545; transform: translateY(-2px); }
+  .retry-missed-btn {
+    background: transparent;
+    color: var(--wrong);
+    border: 1px solid rgba(255, 77, 109, 0.4);
+    padding: 14px 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    margin: 6px;
+    transition: all 0.15s ease;
+  }
+  .retry-missed-btn:hover { background: rgba(255, 77, 109, 0.08); }
+  .retry-missed-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* PRACTICE AREA (hidden initially) */
+  #practice-area { display: none; }
+  #practice-area.show { display: block; }
+
+  /* LIVE CHAR CHECK */
+  .char-preview {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
+    min-height: 44px;
+    display: none;
+    /* 텍스트가 길어도 UI 깨지지 않게 */
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    overflow: hidden;
+  }
+  .char-ok { color: var(--correct); }
+  .char-err { color: var(--wrong); background: rgba(255,77,109,0.15); border-radius: 2px; }
+  .char-pending { color: var(--muted); }
+  .char-cursor { border-left: 2px solid var(--accent); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .section-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 40px 0;
+    opacity: 0.5;
+  }
+
+  /* ROUND BADGE */
+  .round-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: rgba(53, 241, 200, 0.1);
+    border: 1px solid rgba(53, 241, 200, 0.25);
+    color: var(--accent2);
+    padding: 4px 12px;
+    border-radius: 99px;
+    display: inline-block;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Type It</h1>
+    <span>Translation Typing Practice</span>
+  </header>
+
+  <!-- UPLOAD ZONE -->
+  <div id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <span class="icon">📂</span>
+    <p><strong>엑셀 파일을 업로드하세요</strong><br>클릭하거나 파일을 여기에 드래그하세요</p>
+    <p class="upload-hint">A열: 영어 문장 &nbsp;|&nbsp; B열: 번역 문장 (헤더 없이 A1부터 시작)</p>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <!-- PRACTICE AREA -->
+  <div id="practice-area">
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat">
+        <span class="stat-label">진행</span>
+        <span class="stat-value" id="stat-progress">0 / 0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">정답</span>
+        <span class="stat-value" id="stat-correct">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">오답</span>
+        <span class="stat-value" id="stat-wrong" style="color: var(--wrong)">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">라운드</span>
+        <span class="stat-value" id="stat-round" style="color: var(--accent2)">1</span>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+
+    <!-- Main card -->
+    <div class="card" id="main-card">
+      <div class="round-badge" id="round-badge">Round 1</div>
+      <div class="sentence-counter" id="sentence-counter">문장 1 / 10</div>
+
+      <div class="translation-text" id="translation-text">번역된 문장이 여기에 표시됩니다.</div>
+
+      <!-- Hint -->
+      <div class="hint-area">
+        <div class="hint-text" id="hint-text"></div>
+      </div>
+
+      <!-- Char preview -->
+      <div class="char-preview" id="char-preview"></div>
+
+      <!-- Feedback -->
+      <div class="feedback" id="feedback"></div>
+
+      <!-- Input -->
+      <div class="input-wrapper">
+        <input
+          type="text"
+          class="typing-input"
+          id="typing-input"
+          placeholder="영어 원문을 타이핑하세요..."
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+        >
+      </div>
+
+      <!-- Buttons -->
+      <div class="btn-row">
+        <button class="btn btn-primary" id="submit-btn">확인 (Enter)</button>
+        <button class="btn btn-hint" id="hint-btn">💡 힌트 보기</button>
+        <button class="btn btn-secondary" id="skip-btn">건너뛰기</button>
+      </div>
+    </div>
+
+    <!-- Missed section -->
+    <div class="missed-section" id="missed-section" style="display:none;">
+      <div class="card">
+        <div class="missed-label">❌ 틀린 문장들</div>
+        <div id="missed-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLETE SCREEN -->
+  <div id="complete-screen">
+    <div class="complete-icon">🎉</div>
+    <div class="complete-title" id="complete-title">완주!</div>
+    <div class="complete-sub" id="complete-sub">모든 문장을 완료했습니다.</div>
+    <div class="complete-stats">
+      <div class="stat">
+        <span class="stat-label">총 문장</span>
+        <span class="stat-value" id="final-total">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">정답</span>
+        <span class="stat-value" id="final-correct">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">오답</span>
+        <span class="stat-value" id="final-wrong" style="color:var(--wrong)">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">정확도</span>
+        <span class="stat-value" id="final-accuracy">0%</span>
+      </div>
+    </div>
+    <div>
+      <button class="retry-btn" id="retry-all-btn">🔄 전체 다시 연습</button>
+      <button class="retry-missed-btn" id="retry-missed-btn">❌ 틀린 문장만 다시</button>
+      <button class="retry-btn" onclick="resetToUpload()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);">📂 새 파일 업로드</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let sentences = [];       // {en, ko}
+let queue = [];           // current round queue
+let currentIdx = 0;
+let missedInRound = [];   // sentences missed this round
+let roundNum = 1;
+let totalCorrect = 0;
+let totalWrong = 0;
+let hintVisible = false;
+let answered = false;
+
+// ── FILE UPLOAD ──────────────────────────────────────────────
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      const loaded = [];
+      for (const row of rows) {
+        const en = (row[0] || '').toString().trim();
+        const ko = (row[1] || '').toString().trim();
+        if (en && ko) loaded.push({ en, ko });
+      }
+
+      if (loaded.length === 0) {
+        alert('유효한 데이터를 찾을 수 없습니다.\nA열: 영어, B열: 번역 형식으로 입력해주세요.');
+        return;
+      }
+
+      sentences = loaded;
+      startPractice(sentences);
+    } catch (err) {
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── START ────────────────────────────────────────────────────
+function startPractice(list) {
+  queue = [...list];
+  currentIdx = 0;
+  missedInRound = [];
+  roundNum = 1;
+  totalCorrect = 0;
+  totalWrong = 0;
+
+  document.getElementById('upload-zone').style.display = 'none';
+  document.getElementById('complete-screen').classList.remove('show');
+  document.getElementById('practice-area').classList.add('show');
+  document.getElementById('missed-section').style.display = 'none';
+  document.getElementById('missed-list').innerHTML = '';
+
+  updateStats();
+  showSentence();
+}
+
+function showSentence() {
+  if (currentIdx >= queue.length) {
+    showComplete();
+    return;
+  }
+
+  answered = false;
+  hintVisible = false;
+
+  const s = queue[currentIdx];
+  document.getElementById('translation-text').textContent = s.ko;
+  document.getElementById('hint-text').textContent = s.en;
+  document.getElementById('hint-text').classList.remove('visible');
+  document.getElementById('hint-btn').textContent = '💡 힌트 보기';
+
+  const input = document.getElementById('typing-input');
+  input.value = '';
+  input.className = 'typing-input';
+  input.disabled = false;
+  input.focus();
+
+  document.getElementById('char-preview').style.display = 'none';
+  document.getElementById('char-preview').innerHTML = '';
+  document.getElementById('feedback').className = 'feedback';
+  document.getElementById('feedback').textContent = '';
+
+  document.getElementById('sentence-counter').textContent =
+    `문장 ${currentIdx + 1} / ${queue.length}`;
+
+  document.getElementById('round-badge').textContent = `Round ${roundNum}`;
+  document.getElementById('stat-round').textContent = roundNum;
+
+  updateProgress();
+}
+
+// ── INPUT LIVE PREVIEW ───────────────────────────────────────
+document.getElementById('typing-input').addEventListener('input', function() {
+  const typed = this.value;
+  const target = queue[currentIdx]?.en || '';
+
+  // 힌트가 꺼져 있으면 char-preview 숨김
+  if (!hintVisible) {
+    document.getElementById('char-preview').style.display = 'none';
+    return;
+  }
+
+  if (!typed && !target) {
+    document.getElementById('char-preview').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('char-preview').style.display = 'block';
+  let html = '';
+  for (let i = 0; i < Math.max(typed.length, target.length); i++) {
+    if (i < typed.length) {
+      const ch = typed[i] === ' ' ? '·' : typed[i];
+      if (i < target.length && typed[i] === target[i]) {
+        html += `<span class="char-ok">${escHtml(ch)}</span>`;
+      } else if (i < target.length) {
+        html += `<span class="char-err">${escHtml(ch)}</span>`;
+      } else {
+        html += `<span class="char-err">${escHtml(ch)}</span>`;
+      }
+    } else {
+      if (i === typed.length) {
+        html += `<span class="char-cursor"> </span>`;
+      }
+      const ch = target[i] === ' ' ? '·' : target[i];
+      html += `<span class="char-pending">${escHtml(ch)}</span>`;
+    }
+  }
+  document.getElementById('char-preview').innerHTML = html;
+});
+
+document.getElementById('typing-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    checkAnswer();
+  }
+});
+
+// ── BUTTONS ──────────────────────────────────────────────────
+document.getElementById('submit-btn').addEventListener('click', checkAnswer);
+
+document.getElementById('hint-btn').addEventListener('click', function() {
+  hintVisible = !hintVisible;
+  const charPreview = document.getElementById('char-preview');
+  if (hintVisible) {
+    // 힌트 켜기: char-preview에 정답 표시
+    const target = queue[currentIdx]?.en || '';
+    let html = '';
+    const typed = document.getElementById('typing-input').value;
+    for (let i = 0; i < Math.max(typed.length, target.length); i++) {
+      if (i < typed.length) {
+        const ch = typed[i] === ' ' ? '·' : typed[i];
+        if (i < target.length && typed[i] === target[i]) {
+          html += `<span class="char-ok">${escHtml(ch)}</span>`;
+        } else {
+          html += `<span class="char-err">${escHtml(ch)}</span>`;
+        }
+      } else {
+        if (i === typed.length) html += `<span class="char-cursor"> </span>`;
+        const ch = target[i] === ' ' ? '·' : target[i];
+        html += `<span class="char-pending">${escHtml(ch)}</span>`;
+      }
+    }
+    charPreview.innerHTML = html || target.split('').map(ch => `<span class="char-pending">${escHtml(ch === ' ' ? '·' : ch)}</span>`).join('');
+    charPreview.style.display = 'block';
+    this.textContent = '🙈 힌트 숨기기';
+  } else {
+    // 힌트 끄기: char-preview 숨김 (단, 타이핑 중이면 다시 input 이벤트가 관리)
+    charPreview.style.display = 'none';
+    charPreview.innerHTML = '';
+    this.textContent = '💡 힌트 보기';
+  }
+});
+
+document.getElementById('skip-btn').addEventListener('click', function() {
+  if (answered) return;
+  const s = queue[currentIdx];
+  missedInRound.push(s);
+  totalWrong++;
+  showMissed(s, '(건너뜀)');
+  updateStats();
+  next();
+});
+
+// ── CHECK ────────────────────────────────────────────────────
+function checkAnswer() {
+  if (answered) {
+    next();
+    return;
+  }
+
+  const typed = document.getElementById('typing-input').value.trim();
+  const target = queue[currentIdx].en;
+
+  if (!typed) return;
+
+  const isCorrect = normalize(typed) === normalize(target);
+  const input = document.getElementById('typing-input');
+  const feedback = document.getElementById('feedback');
+
+  if (isCorrect) {
+    input.className = 'typing-input correct';
+    feedback.className = 'feedback correct-fb show';
+    feedback.textContent = '✓ 정답입니다! Enter를 눌러 다음으로';
+    totalCorrect++;
+    answered = true;
+    document.getElementById('submit-btn').textContent = '다음 (Enter)';
+  } else {
+    input.className = 'typing-input wrong';
+    feedback.className = 'feedback wrong-fb show';
+    feedback.textContent = '✗ 틀렸습니다. 다시 시도해보세요';
+    totalWrong++;
+    if (!missedInRound.find(x => x === queue[currentIdx])) {
+      missedInRound.push(queue[currentIdx]);
+      showMissed(queue[currentIdx], typed);
+    }
+    setTimeout(() => {
+      input.className = 'typing-input';
+      input.value = '';
+      // 힌트가 켜져 있으면 빈 입력 기준으로 정답 전체를 다시 표시
+      if (hintVisible) {
+        const target = queue[currentIdx]?.en || '';
+        const html = target.split('').map((ch, i) => {
+          const c = ch === ' ' ? '·' : ch;
+          return `<span class="char-pending">${escHtml(c)}</span>`;
+        }).join('');
+        document.getElementById('char-preview').innerHTML = html;
+        document.getElementById('char-preview').style.display = 'block';
+      } else {
+        document.getElementById('char-preview').innerHTML = '';
+        document.getElementById('char-preview').style.display = 'none';
+      }
+    }, 600);
+  }
+  updateStats();
+}
+
+function next() {
+  currentIdx++;
+  answered = false;
+  document.getElementById('submit-btn').textContent = '확인 (Enter)';
+  showSentence();
+}
+
+function normalize(s) {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// ── MISSED ───────────────────────────────────────────────────
+function showMissed(s, typed) {
+  const sec = document.getElementById('missed-section');
+  const list = document.getElementById('missed-list');
+  sec.style.display = 'block';
+
+  const item = document.createElement('div');
+  item.className = 'missed-item';
+  item.innerHTML = `<strong style="color:var(--text)">${escHtml(s.ko)}</strong>
+    <span>정답: ${escHtml(s.en)}</span>
+    ${typed && typed !== '(건너뜀)' ? `<span style="color:var(--muted)">입력: ${escHtml(typed)}</span>` : ''}`;
+  list.appendChild(item);
+}
+
+// ── COMPLETE ─────────────────────────────────────────────────
+function showComplete() {
+  document.getElementById('practice-area').classList.remove('show');
+  const cs = document.getElementById('complete-screen');
+  cs.classList.add('show');
+
+  const total = sentences.length;
+  const accuracy = total > 0 ? Math.round((totalCorrect / (totalCorrect + totalWrong)) * 100) : 0;
+
+  document.getElementById('final-total').textContent = total;
+  document.getElementById('final-correct').textContent = totalCorrect;
+  document.getElementById('final-wrong').textContent = totalWrong;
+  document.getElementById('final-accuracy').textContent = accuracy + '%';
+
+  if (missedInRound.length === 0) {
+    document.getElementById('complete-title').textContent = '완벽해요! 🌟';
+    document.getElementById('complete-sub').textContent = '모든 문장을 틀리지 않고 완주했습니다!';
+  } else {
+    document.getElementById('complete-title').textContent = '라운드 완료!';
+    document.getElementById('complete-sub').textContent =
+      `${missedInRound.length}개 문장을 틀렸습니다. 다시 연습해볼까요?`;
+  }
+
+  const retryMissedBtn = document.getElementById('retry-missed-btn');
+  retryMissedBtn.disabled = missedInRound.length === 0;
+
+  document.getElementById('retry-all-btn').onclick = () => startPractice(sentences);
+  document.getElementById('retry-missed-btn').onclick = () => {
+    if (missedInRound.length > 0) {
+      roundNum++;
+      const missed = [...new Set(missedInRound)];
+      startRound(missed);
+    }
+  };
+}
+
+function startRound(list) {
+  queue = [...list];
+  currentIdx = 0;
+  missedInRound = [];
+
+  document.getElementById('complete-screen').classList.remove('show');
+  document.getElementById('practice-area').classList.add('show');
+  document.getElementById('missed-section').style.display = 'none';
+  document.getElementById('missed-list').innerHTML = '';
+
+  updateStats();
+  showSentence();
+}
+
+// ── STATS / PROGRESS ────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-progress').textContent = `${currentIdx} / ${queue.length}`;
+  document.getElementById('stat-correct').textContent = totalCorrect;
+  document.getElementById('stat-wrong').textContent = totalWrong;
+}
+
+function updateProgress() {
+  const pct = queue.length > 0 ? (currentIdx / queue.length) * 100 : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('stat-progress').textContent = `${currentIdx} / ${queue.length}`;
+}
+
+function resetToUpload() {
+  sentences = [];
+  queue = [];
+  currentIdx = 0;
+  missedInRound = [];
+  roundNum = 1;
+  totalCorrect = 0;
+  totalWrong = 0;
+
+  document.getElementById('complete-screen').classList.remove('show');
+  document.getElementById('practice-area').classList.remove('show');
+  document.getElementById('upload-zone').style.display = 'block';
+  document.getElementById('file-input').value = '';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
